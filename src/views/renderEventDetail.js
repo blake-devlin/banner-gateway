@@ -1,0 +1,94 @@
+'use strict';
+
+const { escHtml } = require('./escHtml');
+
+function renderEventDetail(event) {
+  let headersRows = '';
+  try {
+    const headers = JSON.parse(event.headers_json || '{}');
+    headersRows = Object.entries(headers)
+      .map(([k, v]) => `<tr><td>${escHtml(k)}</td><td>${escHtml(String(v))}</td></tr>`)
+      .join('');
+  } catch {
+    headersRows = `<tr><td colspan="2">${escHtml(event.headers_json || '')}</td></tr>`;
+  }
+
+  let parsedSection = '';
+  if (event.parsed_json) {
+    let pretty = event.parsed_json;
+    try { pretty = JSON.stringify(JSON.parse(event.parsed_json), null, 2); } catch { /* leave as-is */ }
+    parsedSection = `
+      <h2>Parsed Body</h2>
+      <pre>${escHtml(pretty)}</pre>`;
+  }
+
+  let querySection = '';
+  if (event.query_json && event.query_json !== '{}') {
+    let pretty = event.query_json;
+    try { pretty = JSON.stringify(JSON.parse(event.query_json), null, 2); } catch { /* leave as-is */ }
+    querySection = `
+      <h2>Query Parameters</h2>
+      <pre>${escHtml(pretty)}</pre>`;
+  }
+
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Event #${escHtml(String(event.id))} &mdash; DXM700 Push Receiver</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; }
+    body {
+      font-family: system-ui, -apple-system, sans-serif;
+      max-width: 900px; margin: 2rem auto; padding: 0 1rem; color: #222;
+    }
+    a { color: #2563eb; }
+    table { border-collapse: collapse; width: 100%; margin-bottom: 1.5rem; }
+    th, td { border: 1px solid #d1d5db; padding: 7px 12px; text-align: left; font-size: 0.875rem; }
+    th { background: #f3f4f6; font-weight: 600; width: 180px; }
+    pre {
+      background: #f3f4f6; border: 1px solid #d1d5db; border-radius: 4px;
+      padding: 1rem; overflow-x: auto;
+      font-family: 'SFMono-Regular', Consolas, monospace; font-size: 0.825rem;
+      white-space: pre-wrap; word-break: break-all;
+    }
+    h2 { margin-top: 2rem; font-size: 1.1rem; }
+    .back { margin-bottom: 1.25rem; display: block; }
+    .parse-error { color: #dc2626; font-size: 0.85rem; }
+  </style>
+</head>
+<body>
+  <a class="back" href="/">&larr; Back to event list</a>
+  <h1>Push Event #${escHtml(String(event.id))}</h1>
+
+  <h2>Summary</h2>
+  <table>
+    <tr><th>Received At</th><td>${escHtml(event.received_at)}</td></tr>
+    <tr><th>Remote IP</th><td>${escHtml(event.remote_ip || '—')}</td></tr>
+    <tr><th>Method</th><td>${escHtml(event.method)}</td></tr>
+    <tr><th>Path</th><td>${escHtml(event.path)}</td></tr>
+    <tr><th>Content-Type</th><td>${escHtml(event.content_type || '(none)')}</td></tr>
+    ${event.parse_error ? `<tr><th>Parse Error</th><td class="parse-error">${escHtml(event.parse_error)}</td></tr>` : ''}
+  </table>
+
+  <h2>HTTP Headers</h2>
+  <table>
+    <thead><tr><th>Header</th><th>Value</th></tr></thead>
+    <tbody>${headersRows}</tbody>
+  </table>
+
+  <h2>Raw Body</h2>
+  <pre>${escHtml(event.raw_body || '(empty)')}</pre>
+
+  ${parsedSection}
+  ${querySection}
+
+  <p style="margin-top:2rem">
+    <a href="/events/${escHtml(String(event.id))}">JSON record</a>
+  </p>
+</body>
+</html>`;
+}
+
+module.exports = { renderEventDetail };
