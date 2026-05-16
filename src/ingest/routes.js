@@ -52,9 +52,22 @@ async function handlePush(req, res) {
     `[push] id=${dbId} ip=${captured.remote_ip} ct="${captured.content_type}" bytes=${captured.raw_body.length} path=${captured.path}`
   );
 
-  // Minimal response — embedded gateways expect a simple 200
-  res.status(200).type('text/plain').send('OK');
+  res.status(200).json({
+    ok: true,
+    receivedAt: captured.received_at,
+    path: captured.path,
+  });
 }
+
+// GET /dxm/push — lets the gateway (or a curl test) verify the endpoint is alive
+router.get('/dxm/push', (_req, res) => {
+  res.status(200).json({
+    ok: true,
+    endpoint: '/dxm/push',
+    methods: ['GET', 'POST'],
+    timestamp: new Date().toISOString(),
+  });
+});
 
 router.post('/dxm/push', rawBody, sharedSecretCheck, handlePush);
 

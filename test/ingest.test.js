@@ -12,15 +12,27 @@ const { closeDb } = require('../src/db');
 
 after(() => closeDb());
 
+describe('GET /dxm/push', () => {
+  it('returns 200 alive check (no auth required)', async () => {
+    const res = await supertest(app).get('/dxm/push');
+    assert.equal(res.status, 200);
+    assert.equal(res.body.ok, true);
+    assert.equal(res.body.endpoint, '/dxm/push');
+    assert.ok(typeof res.body.timestamp === 'string');
+  });
+});
+
 describe('POST /dxm/push', () => {
-  it('accepts a JSON payload and returns 200 OK', async () => {
+  it('accepts a JSON payload and returns 200 with ok:true', async () => {
     const res = await supertest(app)
       .post('/dxm/push')
       .set('Content-Type', 'application/json')
       .send(JSON.stringify({ gateway: 'DXM700', register: 'AI1', value: 123 }));
 
     assert.equal(res.status, 200);
-    assert.equal(res.text, 'OK');
+    assert.equal(res.body.ok, true);
+    assert.equal(res.body.path, '/dxm/push');
+    assert.ok(typeof res.body.receivedAt === 'string');
   });
 
   it('accepts an XML payload without crashing', async () => {
@@ -31,7 +43,7 @@ describe('POST /dxm/push', () => {
       .send(xml);
 
     assert.equal(res.status, 200);
-    assert.equal(res.text, 'OK');
+    assert.equal(res.body.ok, true);
   });
 
   it('accepts application/xml without crashing', async () => {
@@ -102,7 +114,7 @@ describe('POST /debug/*', () => {
       .send('debug route test');
 
     assert.equal(res.status, 200);
-    assert.equal(res.text, 'OK');
+    assert.equal(res.body.ok, true);
   });
 });
 
