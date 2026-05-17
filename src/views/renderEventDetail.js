@@ -5,7 +5,14 @@ const { TEMP_WARN_F, VEL_WARN_MM_S } = require('../ingest/parseSensorReading');
 
 function fmtTime(iso) {
   if (!iso) return '—';
-  return iso.replace('T', ' ').replace(/\.\d+Z$/, ' UTC').replace(/Z$/, ' UTC');
+  try {
+    return new Date(iso).toLocaleString('en-US', {
+      timeZone: 'America/New_York',
+      month: 'short', day: 'numeric', year: 'numeric',
+      hour: 'numeric', minute: '2-digit',
+      hour12: true, timeZoneName: 'short',
+    });
+  } catch { return iso; }
 }
 
 function fmtNum(val, digits) {
