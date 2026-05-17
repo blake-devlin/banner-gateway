@@ -2,6 +2,12 @@
 
 const { XMLParser } = require('fast-xml-parser');
 
+// Banner DXM firmware emits trailing commas before closing braces/brackets,
+// which is invalid JSON. This strips them so JSON.parse succeeds.
+function stripTrailingCommas(str) {
+  return str.replace(/,(\s*[}\]])/g, '$1');
+}
+
 const xmlParser = new XMLParser({ ignoreAttributes: false });
 
 /**
@@ -29,7 +35,9 @@ function parsePayload(rawBody, contentType) {
 
   try {
     if (ct === 'application/json') {
-      parsed = JSON.parse(rawBody);
+      // Banner DXM firmware sends trailing commas after the last value in an object,
+      // which is invalid standard JSON. Strip them before parsing.
+      parsed = JSON.parse(stripTrailingCommas(rawBody));
     } else if (ct === 'application/xml' || ct === 'text/xml') {
       parsed = xmlParser.parse(rawBody);
     } else if (ct === 'application/x-www-form-urlencoded') {
@@ -38,7 +46,7 @@ function parsePayload(rawBody, contentType) {
       // Unknown or missing content type — try heuristic detection
       const trimmed = rawBody.trim();
       if (trimmed.startsWith('{') || trimmed.startsWith('[')) {
-        parsed = JSON.parse(trimmed);
+        parsed = JSON.parse(stripTrailingCommas(trimmed));
       } else if (trimmed.startsWith('<')) {
         parsed = xmlParser.parse(trimmed);
       }

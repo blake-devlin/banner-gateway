@@ -43,7 +43,29 @@ describe('POST /dxm/push', () => {
     assert.ok(res.headers['x-dxm-request-id'], 'should include X-DXM-Request-ID header');
   });
 
-  it('does not crash on malformed JSON — still returns 200 OK', async () => {
+  it('parses Banner DXM JSON with trailing commas (real firmware quirk)', async () => {
+    // The Banner DXM firmware sends trailing commas after the last value and
+    // uses \r\n line endings (CRLF). The trailing comma is invalid standard JSON.
+    // Note: the terminal may render the \r\n body with apparent extra braces — the
+    // actual payload has matched open/close braces; only the comma is the problem.
+    const dxmPayload = '{\r\n  "state": {\r\n    "reported": {\r\n"reg0": -1,\r\n    }\r\n  }\r\n}';
+    const res = await supertest(app)
+      .post('/dxm/push')
+      .set('Content-Type', 'application/json')
+      .send(dxmPayload);
+
+    assert.equal(res.status, 200);
+    assert.equal(res.text, 'OK');
+
+    // Verify parsed body was stored (not a parse error)
+    const eventsRes = await supertest(app).get('/events');
+    const latest = eventsRes.body[0];
+    const detail = await supertest(app).get(`/events/${latest.id}`);
+    assert.ok(detail.body.parsed_json, 'DXM trailing-comma JSON should parse successfully');
+    assert.equal(detail.body.parse_error, null, 'should have no parse error');
+  });
+
+  it('does not crash on truly malformed JSON — still returns 200 OK', async () => {
     const res = await supertest(app)
       .post('/dxm/push')
       .set('Content-Type', 'application/json')
