@@ -242,3 +242,41 @@ See `.env.example` for the full list with descriptions. Key variables:
   `raw_body` will still contain the full payload. Open an event's detail page to inspect it.
   Once real sample packets are collected, update `src/ingest/parsePayload.js` with a
   dedicated parser.
+
+**Logs show `parseError` but tcpdump confirms the push reached the server**
+
+If you see this in the logs:
+```
+WARNING: DXM payload declared application/json but failed strict JSON parsing.
+parseError: Unexpected non-whitespace character after JSON at position 69
+```
+
+But tcpdump shows:
+```
+HTTP: POST /dxm/push HTTP/1.1
+HTTP: HTTP/1.1 200 OK
+```
+
+**The gateway reached the receiver successfully.** The issue is payload formatting, not networking.
+The Banner DXM700 firmware sends JSON with two defects that make it invalid standard JSON:
+
+1. **Trailing comma** after the last property value:
+   ```json
+   "reg0": -1,   ← comma before } is invalid
+   ```
+
+2. **Extra closing brace** after the complete JSON object:
+   ```json
+   { "state": { "reported": { "reg0": -1 } } }
+   }                                             ← extra } appended by firmware
+   ```
+
+The receiver handles this gracefully:
+- Always returns `200 OK` — the push is considered received
+- Always preserves the exact raw body
+- Attempts a `diagnosticParsedBody` fallback using relaxed parsing
+- Extracts register values from `state.reported` when possible
+- Logs a clear `WARNING` block so the issue is visible without guessing
+
+The raw body and any diagnostic parse result are always available in the event detail view
+at `GET /events/:id/view`.

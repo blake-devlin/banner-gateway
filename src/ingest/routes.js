@@ -27,15 +27,10 @@ function sharedSecretCheck(req, res, next) {
 async function handlePush(req, res) {
   const requestId = crypto.randomUUID().split('-')[0];
   const captured = captureRequest(req);
-  const { parsed, parseError } = parsePayload(captured.raw_body, captured.content_type);
+  const { parsed, parseError, diagnosticParsed, diagnosticError, registers } =
+    parsePayload(captured.raw_body, captured.content_type);
 
-  const parsedSummary = parsed !== null
-    ? JSON.stringify(parsed)
-    : parseError
-      ? `(parse error: ${parseError})`
-      : '(not parsed — stored as raw text)';
-
-  console.log([
+  const lines = [
     '--- DXM PUSH RECEIVED ---',
     `requestId:     ${requestId}`,
     `timestamp:     ${captured.received_at}`,
@@ -46,9 +41,35 @@ async function handlePush(req, res) {
     `contentLength: ${req.headers['content-length'] || '(not set)'}`,
     `headers:       ${captured.headers_json}`,
     `rawBody:       ${captured.raw_body || '(empty)'}`,
-    `parsedBody:    ${parsedSummary}`,
-    '--- END DXM PUSH ---',
-  ].join('\n'));
+  ];
+
+  if (parsed !== null) {
+    lines.push(`parsedBody:    ${JSON.stringify(parsed)}`);
+  } else if (parseError) {
+    lines.push('');
+    lines.push(`WARNING: DXM payload declared ${captured.content_type || 'unknown'} but failed strict JSON parsing.`);
+    lines.push(`requestId:     ${requestId}`);
+    lines.push(`parseError:    ${parseError}`);
+    lines.push(`rawBody preserved for debugging.`);
+    if (diagnosticParsed !== null) {
+      lines.push(`diagnosticParsedBody: ${JSON.stringify(diagnosticParsed)}`);
+    } else if (diagnosticError) {
+      lines.push(`diagnosticParseError: ${diagnosticError}`);
+    }
+    lines.push('');
+  } else {
+    lines.push(`parsedBody:    (not parsed — stored as raw text)`);
+  }
+
+  if (registers) {
+    lines.push('registers:');
+    for (const [key, value] of Object.entries(registers)) {
+      lines.push(`  ${key}: ${value}`);
+    }
+  }
+
+  lines.push('--- END DXM PUSH ---');
+  console.log(lines.join('\n'));
 
   const record = {
     ...captured,

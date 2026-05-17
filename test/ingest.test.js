@@ -43,12 +43,11 @@ describe('POST /dxm/push', () => {
     assert.ok(res.headers['x-dxm-request-id'], 'should include X-DXM-Request-ID header');
   });
 
-  it('parses Banner DXM JSON with trailing commas (real firmware quirk)', async () => {
-    // The Banner DXM firmware sends trailing commas after the last value and
-    // uses \r\n line endings (CRLF). The trailing comma is invalid standard JSON.
-    // Note: the terminal may render the \r\n body with apparent extra braces — the
-    // actual payload has matched open/close braces; only the comma is the problem.
-    const dxmPayload = '{\r\n  "state": {\r\n    "reported": {\r\n"reg0": -1,\r\n    }\r\n  }\r\n}';
+  it('returns 200 for real DXM payload (trailing comma + extra brace) without crashing', async () => {
+    // Real Banner DXM700 firmware payload: CRLF line endings, trailing comma,
+    // and one extra } after the closing brace. Strict JSON.parse rejects this.
+    // The server must return 200 and preserve the raw body regardless.
+    const dxmPayload = '{\r\n  "state": {\r\n    "reported": {\r\n      "reg0": -1,\r\n    }\r\n  }\r\n}\r\n}';
     const res = await supertest(app)
       .post('/dxm/push')
       .set('Content-Type', 'application/json')
@@ -56,13 +55,25 @@ describe('POST /dxm/push', () => {
 
     assert.equal(res.status, 200);
     assert.equal(res.text, 'OK');
+  });
 
-    // Verify parsed body was stored (not a parse error)
+  it('preserves raw body and sets parse_error when strict parse fails', async () => {
+    const dxmPayload = '{\r\n  "state": {\r\n    "reported": {\r\n      "reg0": -1,\r\n    }\r\n  }\r\n}\r\n}';
+    await supertest(app)
+      .post('/dxm/push')
+      .set('Content-Type', 'application/json')
+      .send(dxmPayload);
+
     const eventsRes = await supertest(app).get('/events');
     const latest = eventsRes.body[0];
     const detail = await supertest(app).get(`/events/${latest.id}`);
-    assert.ok(detail.body.parsed_json, 'DXM trailing-comma JSON should parse successfully');
-    assert.equal(detail.body.parse_error, null, 'should have no parse error');
+
+    assert.ok(detail.body.parse_error, 'strict parse error should be recorded');
+    assert.ok(detail.body.raw_body, 'raw body must be preserved');
+    assert.ok(
+      detail.body.raw_body.includes('reg0'),
+      'raw body should contain the original payload'
+    );
   });
 
   it('does not crash on truly malformed JSON — still returns 200 OK', async () => {
