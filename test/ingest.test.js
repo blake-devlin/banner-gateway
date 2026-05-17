@@ -1,6 +1,5 @@
 'use strict';
 
-// Set env before any app modules are loaded
 process.env.DB_PATH = ':memory:';
 process.env.LOG_DIR = './logs';
 
@@ -12,83 +11,105 @@ const { closeDb } = require('../src/db');
 
 after(() => closeDb());
 
+// ── GET /dxm/push ─────────────────────────────────────────────────────────────
+
 describe('GET /dxm/push', () => {
-  it('returns 200 alive check (no auth required)', async () => {
+  it('returns 200 alive check', async () => {
     const res = await supertest(app).get('/dxm/push');
     assert.equal(res.status, 200);
     assert.equal(res.body.ok, true);
     assert.equal(res.body.endpoint, '/dxm/push');
     assert.ok(typeof res.body.timestamp === 'string');
   });
+
+  it('is not blocked by auth or catch-all middleware', async () => {
+    // GET with no headers, no auth — must return 200
+    const res = await supertest(app).get('/dxm/push');
+    assert.equal(res.status, 200);
+  });
 });
 
+// ── POST /dxm/push ────────────────────────────────────────────────────────────
+
 describe('POST /dxm/push', () => {
-  it('accepts a JSON payload and returns 200 with ok:true', async () => {
+  it('accepts JSON and returns 200 OK text/plain', async () => {
     const res = await supertest(app)
       .post('/dxm/push')
       .set('Content-Type', 'application/json')
       .send(JSON.stringify({ gateway: 'DXM700', register: 'AI1', value: 123 }));
 
     assert.equal(res.status, 200);
-    assert.equal(res.body.ok, true);
-    assert.equal(res.body.path, '/dxm/push');
-    assert.ok(typeof res.body.receivedAt === 'string');
+    assert.equal(res.text, 'OK');
+    assert.ok(res.headers['x-dxm-request-id'], 'should include X-DXM-Request-ID header');
   });
 
-  it('accepts an XML payload without crashing', async () => {
-    const xml = '<push><gateway>DXM700</gateway><value>123</value></push>';
+  it('does not crash on malformed JSON — still returns 200 OK', async () => {
+    const res = await supertest(app)
+      .post('/dxm/push')
+      .set('Content-Type', 'application/json')
+      .send('{ this is not valid json !!!');
+
+    assert.equal(res.status, 200);
+    assert.equal(res.text, 'OK');
+  });
+
+  it('accepts text/xml without crashing', async () => {
     const res = await supertest(app)
       .post('/dxm/push')
       .set('Content-Type', 'text/xml')
-      .send(xml);
+      .send('<push><gateway>DXM700</gateway><value>123</value></push>');
 
     assert.equal(res.status, 200);
-    assert.equal(res.body.ok, true);
+    assert.equal(res.text, 'OK');
   });
 
   it('accepts application/xml without crashing', async () => {
-    const xml = '<?xml version="1.0"?><data><v>1</v></data>';
     const res = await supertest(app)
       .post('/dxm/push')
       .set('Content-Type', 'application/xml')
-      .send(xml);
+      .send('<?xml version="1.0"?><data><v>1</v></data>');
 
     assert.equal(res.status, 200);
+    assert.equal(res.text, 'OK');
   });
 
-  it('accepts plain text without crashing', async () => {
+  it('accepts text/plain without crashing', async () => {
     const res = await supertest(app)
       .post('/dxm/push')
       .set('Content-Type', 'text/plain')
       .send('plain text payload from gateway');
 
     assert.equal(res.status, 200);
+    assert.equal(res.text, 'OK');
   });
 
-  it('accepts form-encoded data without crashing', async () => {
+  it('accepts application/x-www-form-urlencoded without crashing', async () => {
     const res = await supertest(app)
       .post('/dxm/push')
       .set('Content-Type', 'application/x-www-form-urlencoded')
       .send('gateway=DXM700&value=42');
 
     assert.equal(res.status, 200);
+    assert.equal(res.text, 'OK');
   });
 
-  it('accepts an unknown content type without crashing', async () => {
+  it('accepts unknown content type without crashing', async () => {
     const res = await supertest(app)
       .post('/dxm/push')
       .set('Content-Type', 'application/octet-stream')
       .send('binary-ish data');
 
     assert.equal(res.status, 200);
+    assert.equal(res.text, 'OK');
   });
 
-  it('accepts a missing content type without crashing', async () => {
+  it('accepts missing content type without crashing', async () => {
     const res = await supertest(app)
       .post('/dxm/push')
       .send('no content type header');
 
     assert.equal(res.status, 200);
+    assert.equal(res.text, 'OK');
   });
 
   it('stores the raw body in the database', async () => {
@@ -101,22 +122,64 @@ describe('POST /dxm/push', () => {
     const eventsRes = await supertest(app).get('/events');
     assert.equal(eventsRes.status, 200);
     const latest = eventsRes.body[0];
-    assert.ok(latest.body_preview.includes('body-storage-check'),
-      'raw body should be stored and appear in body_preview');
+    assert.ok(
+      latest.body_preview.includes('body-storage-check'),
+      'raw body should be stored and appear in body_preview'
+    );
   });
 });
 
+// ── /dmx/push — typo alias ────────────────────────────────────────────────────
+
+describe('GET /dmx/push (typo alias)', () => {
+  it('returns 200 with a typo warning in the response body', async () => {
+    const res = await supertest(app).get('/dmx/push');
+    assert.equal(res.status, 200);
+    assert.equal(res.body.ok, true);
+    assert.ok(
+      res.body.warning && res.body.warning.includes('/dxm/push'),
+      'response should warn about the correct path'
+    );
+  });
+});
+
+describe('POST /dmx/push (typo alias)', () => {
+  it('returns 200 OK so the gateway does not stall', async () => {
+    const res = await supertest(app)
+      .post('/dmx/push')
+      .set('Content-Type', 'application/json')
+      .send(JSON.stringify({ test: true }));
+
+    assert.equal(res.status, 200);
+    assert.equal(res.text, 'OK');
+  });
+
+  it('still includes X-DXM-Request-ID header on typo path', async () => {
+    const res = await supertest(app)
+      .post('/dmx/push')
+      .set('Content-Type', 'text/plain')
+      .send('typo path test');
+
+    assert.equal(res.status, 200);
+    assert.ok(res.headers['x-dxm-request-id'], 'should include correlation ID even on typo path');
+  });
+});
+
+// ── /debug/* ──────────────────────────────────────────────────────────────────
+
 describe('POST /debug/*', () => {
-  it('accepts debug route pushes and returns 200', async () => {
+  it('accepts debug route pushes and returns 200 OK', async () => {
     const res = await supertest(app)
       .post('/debug/test-path')
       .set('Content-Type', 'text/plain')
       .send('debug route test');
 
     assert.equal(res.status, 200);
-    assert.equal(res.body.ok, true);
+    assert.equal(res.text, 'OK');
   });
 });
+
+// ── Events API ────────────────────────────────────────────────────────────────
 
 describe('GET /events', () => {
   it('returns an array of captured events', async () => {
@@ -127,8 +190,8 @@ describe('GET /events', () => {
 
     const res = await supertest(app).get('/events');
     assert.equal(res.status, 200);
-    assert.ok(Array.isArray(res.body), 'should return an array');
-    assert.ok(res.body.length >= 1, 'should have at least one event');
+    assert.ok(Array.isArray(res.body));
+    assert.ok(res.body.length >= 1);
   });
 
   it('GET /events/:id returns full event record', async () => {
@@ -137,9 +200,9 @@ describe('GET /events', () => {
 
     const res = await supertest(app).get(`/events/${id}`);
     assert.equal(res.status, 200);
-    assert.ok(res.body.id === id);
-    assert.ok('raw_body' in res.body, 'detail record should include raw_body');
-    assert.ok('headers_json' in res.body, 'detail record should include headers_json');
+    assert.equal(res.body.id, id);
+    assert.ok('raw_body' in res.body);
+    assert.ok('headers_json' in res.body);
   });
 
   it('GET /events/:id/view returns HTML', async () => {
