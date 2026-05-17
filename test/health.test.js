@@ -25,7 +25,7 @@ describe('GET /', () => {
     const res = await supertest(app).get('/');
     assert.equal(res.status, 200);
     assert.ok(res.headers['content-type'].includes('text/html'));
-    assert.ok(res.text.includes('DXM700 Push Receiver'));
+    assert.ok(res.text.includes('DXM700 Vibration Monitor'));
     assert.ok(res.text.includes('/dxm/push'));
   });
 

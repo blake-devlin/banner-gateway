@@ -1,8 +1,41 @@
 'use strict';
 
 const { escHtml } = require('./escHtml');
+const { TEMP_WARN_F, VEL_WARN_MM_S } = require('../ingest/parseSensorReading');
 
-function renderEventDetail(event) {
+function fmtNum(val, digits) {
+  return (val !== null && val !== undefined) ? Number(val).toFixed(digits) : null;
+}
+
+function renderSensorSummary(reading) {
+  if (!reading) return '';
+  const r = reading;
+  const hasSensor = r.temp_f !== null || r.x_vel_mm_s !== null;
+  if (!hasSensor && !r.gateway_id) return '';
+
+  const warn = (val, thresh) =>
+    (val !== null && val !== undefined && val > thresh) ? ' style="color:#f59e0b;font-weight:600"' : '';
+
+  const row = (label, val, unit, warnAttr = '') =>
+    val !== null && val !== undefined
+      ? `<tr><th>${escHtml(label)}</th><td${warnAttr}>${escHtml(String(val))} ${escHtml(unit)}</td></tr>`
+      : `<tr><th>${escHtml(label)}</th><td style="color:#888">—</td></tr>`;
+
+  return `
+  <h2>Sensor Reading</h2>
+  <table>
+    <tr><th>Gateway ID</th><td>${escHtml(r.gateway_id || '—')}</td></tr>
+    <tr><th>Gateway Time</th><td>${escHtml(r.gateway_time_display || r.gateway_time_raw || '—')}</td></tr>
+    ${row('Temperature', fmtNum(r.temp_f, 2), '°F', warn(r.temp_f, TEMP_WARN_F))}
+    ${row('Temperature', fmtNum(r.temp_c, 2), '°C')}
+    ${row('X Velocity', fmtNum(r.x_vel_mm_s, 4), 'mm/s', warn(r.x_vel_mm_s, VEL_WARN_MM_S))}
+    ${row('Y Velocity', fmtNum(r.y_vel_mm_s, 4), 'mm/s', warn(r.y_vel_mm_s, VEL_WARN_MM_S))}
+    ${row('Z Velocity', fmtNum(r.z_vel_mm_s, 4), 'mm/s', warn(r.z_vel_mm_s, VEL_WARN_MM_S))}
+    ${row('HFE Acceleration', fmtNum(r.hfe_accel, 4), 'G')}
+  </table>`;
+}
+
+function renderEventDetail(event, reading) {
   let headersRows = '';
   try {
     const headers = JSON.parse(event.headers_json || '{}');
@@ -36,7 +69,7 @@ function renderEventDetail(event) {
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Event #${escHtml(String(event.id))} &mdash; DXM700 Push Receiver</title>
+  <title>Event #${escHtml(String(event.id))} &mdash; DXM700 Vibration Monitor</title>
   <style>
     *, *::before, *::after { box-sizing: border-box; }
     body {
@@ -59,8 +92,10 @@ function renderEventDetail(event) {
   </style>
 </head>
 <body>
-  <a class="back" href="/">&larr; Back to event list</a>
+  <a class="back" href="/">&larr; Back to dashboard</a>
   <h1>Push Event #${escHtml(String(event.id))}</h1>
+
+  ${renderSensorSummary(reading)}
 
   <h2>Summary</h2>
   <table>

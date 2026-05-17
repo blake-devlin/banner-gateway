@@ -52,7 +52,7 @@ function insertEvent(data) {
 function getEvents(limit = 50) {
   return getDb().prepare(`
     SELECT id, received_at, method, path, remote_ip, content_type,
-      substr(raw_body, 1, 200) AS body_preview, created_at
+      raw_body, content_type, created_at
     FROM dxm_push_events
     ORDER BY id DESC
     LIMIT ?

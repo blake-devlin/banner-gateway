@@ -6,7 +6,7 @@
   "scripts": {
     "start": "node src/server.js",
     "dev": "node --watch src/server.js",
-    "test": "node --test test/health.test.js test/ingest.test.js test/parsePayload.test.js"
+    "test": "node --test test/health.test.js test/ingest.test.js test/parsePayload.test.js test/parseSensorReading.test.js"
   },
   "dependencies": {
     "better-sqlite3": "^9.4.3",

@@ -156,8 +156,8 @@ describe('POST /dxm/push', () => {
     assert.equal(eventsRes.status, 200);
     const latest = eventsRes.body[0];
     assert.ok(
-      latest.body_preview.includes('body-storage-check'),
-      'raw body should be stored and appear in body_preview'
+      latest.raw_body.includes('body-storage-check'),
+      'raw body should be stored and retrievable'
     );
   });
 });
