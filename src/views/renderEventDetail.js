@@ -3,6 +3,11 @@
 const { escHtml } = require('./escHtml');
 const { TEMP_WARN_F, VEL_WARN_MM_S } = require('../ingest/parseSensorReading');
 
+function fmtTime(iso) {
+  if (!iso) return '—';
+  return iso.replace('T', ' ').replace(/\.\d+Z$/, ' UTC').replace(/Z$/, ' UTC');
+}
+
 function fmtNum(val, digits) {
   return (val !== null && val !== undefined) ? Number(val).toFixed(digits) : null;
 }
@@ -99,7 +104,7 @@ function renderEventDetail(event, reading) {
 
   <h2>Summary</h2>
   <table>
-    <tr><th>Received At</th><td>${escHtml(event.received_at)}</td></tr>
+    <tr><th>Received At</th><td>${escHtml(fmtTime(event.received_at))}</td></tr>
     <tr><th>Remote IP</th><td>${escHtml(event.remote_ip || '—')}</td></tr>
     <tr><th>Method</th><td>${escHtml(event.method)}</td></tr>
     <tr><th>Path</th><td>${escHtml(event.path)}</td></tr>

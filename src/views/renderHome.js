@@ -3,6 +3,11 @@
 const { escHtml } = require('./escHtml');
 const { TEMP_WARN_F, VEL_WARN_MM_S } = require('../ingest/parseSensorReading');
 
+function fmtTime(iso) {
+  if (!iso) return '—';
+  return iso.replace('T', ' ').replace(/\.\d+Z$/, ' UTC').replace(/Z$/, ' UTC');
+}
+
 function fmt(val, unit, digits = 2) {
   if (val === null || val === undefined) return '—';
   return `${Number(val).toFixed(digits)} ${unit}`;
@@ -87,7 +92,7 @@ function renderReadingsTable(events) {
     const rowClass = hasSensorData ? '' : ' class="no-sensor"';
 
     return `<tr${rowClass}>
-      <td>${escHtml(e.received_at)}</td>
+      <td>${escHtml(fmtTime(e.received_at))}</td>
       <td>${escHtml(r.gateway_id || '—')}</td>
       <td class="${tempFClass ? 'warn-cell' : ''}">${r.temp_f !== null && r.temp_f !== undefined ? escHtml(r.temp_f.toFixed(2)) + ' °F' : '—'}</td>
       <td>${r.temp_c !== null && r.temp_c !== undefined ? escHtml(r.temp_c.toFixed(2)) + ' °C' : '—'}</td>
